@@ -6,15 +6,16 @@ import os
 
 TOKEN = os.getenv("TOKEN")
 
+GUILD_ID = 1459639907004711127
+
 intents = discord.Intents.all()
 bot = commands.Bot(command_prefix="/", intents=intents)
 
 DATA_FILE = "data.json"
-
 bot_enabled = True
 
 # --------------------
-# DATA KEZELÉS
+# DATA
 # --------------------
 def load_data():
     try:
@@ -44,7 +45,10 @@ async def on_member_join(member):
         data[str(member.id)] = datetime.utcnow().isoformat()
         save_data(data)
 
-@tasks.loop(hours=1)
+# --------------------
+# CHECK LOOP
+# --------------------
+@tasks.loop(minutes=10)
 async def check_members():
     if not bot_enabled:
         return
@@ -54,10 +58,12 @@ async def check_members():
     for guild in bot.guilds:
         for member in guild.members:
 
-            if str(member.id) not in data:
+            if not is_prtag(member):
                 continue
 
-            if not is_prtag(member):
+            if str(member.id) not in data:
+                data[str(member.id)] = now.isoformat()
+                save_data(data)
                 continue
 
             join_time = datetime.fromisoformat(data[str(member.id)])
@@ -72,71 +78,47 @@ async def check_members():
                 save_data(data)
 
 # --------------------
-# /ELLENORZES
+# COMMANDOK
 # --------------------
-@bot.tree.command(name="ellenorzes")
+guild = discord.Object(id=GUILD_ID)
+
+@bot.tree.command(name="ellenorzes", guild=guild)
 async def ellenorzes(interaction: discord.Interaction):
     await interaction.response.send_message("🟢 Bot működik")
 
-# --------------------
-# /KI (bot leállítás logika)
-# --------------------
-@bot.tree.command(name="ki")
+@bot.tree.command(name="ki", guild=guild)
 async def ki(interaction: discord.Interaction):
     global bot_enabled
     bot_enabled = False
-    await interaction.response.send_message("🔴 Bot kikapcsolva")
+    await interaction.response.send_message("🔴 Kikapcsolva")
 
-# --------------------
-# /BE
-# --------------------
-@bot.tree.command(name="be")
+@bot.tree.command(name="be", guild=guild)
 async def be(interaction: discord.Interaction):
     global bot_enabled
     bot_enabled = True
-    await interaction.response.send_message("🟢 Bot bekapcsolva")
+    await interaction.response.send_message("🟢 Bekapcsolva")
 
-
-@bot.tree.command(name="refresh")
-async def refresh(interaction: discord.Interaction):
-
-    if not interaction.user.guild_permissions.staff:
-        return await interaction.response.send_message("❌ Nincs jogod!", ephemeral=True)
-
-    try:
-        synced = await bot.tree.sync()
-        await interaction.response.send_message(f"🔄 Frissítve! ({len(synced)} parancs)")
-    except Exception as e:
-        await interaction.response.send_message(f"Hiba: {e}")# --------------------
-# /HOZZAAD (manuális user)
-# --------------------
-@bot.tree.command(name="hozzaad")
+@bot.tree.command(name="hozzaad", guild=guild)
 async def hozzaad(interaction: discord.Interaction, member: discord.Member):
     data[str(member.id)] = datetime.utcnow().isoformat()
     save_data(data)
-    await interaction.response.send_message(f"➕ Hozzáadva: {member.name}")
+    await interaction.response.send_message(f"➕ {member.name} hozzáadva")
 
-# --------------------
-# /KIVESZ
-# --------------------
-@bot.tree.command(name="kivesz")
+@bot.tree.command(name="kivesz", guild=guild)
 async def kivesz(interaction: discord.Interaction, member: discord.Member):
     if str(member.id) in data:
         del data[str(member.id)]
         save_data(data)
-    await interaction.response.send_message(f"🗑 Kivéve: {member.name}")
+    await interaction.response.send_message(f"🗑 {member.name} kivéve")
 
-# --------------------
-# /STATS
-# --------------------
-@bot.tree.command(name="stats")
+@bot.tree.command(name="stats", guild=guild)
 async def stats(interaction: discord.Interaction):
 
     now = datetime.utcnow()
-    msg = "📊 PR.TAG STATISZTIKA:\n\n"
+    msg = "📊 PR.TAG STATS:\n\n"
 
-    for guild in bot.guilds:
-        for member in guild.members:
+    for guild_obj in bot.guilds:
+        for member in guild_obj.members:
 
             if not is_prtag(member):
                 continue
@@ -152,15 +134,21 @@ async def stats(interaction: discord.Interaction):
             if sec > 0:
                 h = sec // 3600
                 m = (sec % 3600) // 60
-                msg += f"{member.name} → {h}h {m}m maradt\n"
+                s = sec % 60
+                msg += f"{member.name} → {h}h {m}m {s}s\n"
             else:
-                msg += f"{member.name} → KÖZEL A KICKHEZ\n"
+                msg += f"{member.name} → KICK SOON\n"
 
     await interaction.response.send_message(msg[:2000])
 
-# --------------------
-# READY
-# --------------------
+@bot.tree.command(name="refresh", guild=guild)
+async def refresh(interaction: discord.Interaction):
+    try:
+        synced = await bot.tree.sync(guild=guild)
+        await interaction.response.send_message(f"🔄 Frissítve ({len(synced)})")
+    except Exception as e:
+        await interaction.response.send_message(f"Hiba: {e}")
+
 # --------------------
 # READY
 # --------------------
@@ -170,12 +158,10 @@ async def on_ready():
 
     check_members.start()
 
-    guild = discord.Object(id=1459639907004711127)
-
     try:
         synced = await bot.tree.sync(guild=guild)
-        print(f"Guild sync: {len(synced)}")
+        print(f"Synced: {len(synced)}")
     except Exception as e:
         print(e)
-        
+
 bot.run(TOKEN)
