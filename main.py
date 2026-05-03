@@ -30,7 +30,20 @@ def save_data(data):
 
 data = load_data()
 
-# --------------------
+@bot.event
+async def on_ready():
+    print("Bot online")
+
+    check_members.start()
+
+    guild = discord.Object(id=1459639907004711127)
+
+    try:
+        # csak guild sync (NINCS global)
+        synced = await bot.tree.sync(guild=guild)
+        print(f"Synced: {len(synced)}")
+    except Exception as e:
+        print(e)# --------------------
 # PR.TAG CHECK
 # --------------------
 def is_prtag(member):
