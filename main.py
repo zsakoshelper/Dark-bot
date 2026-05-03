@@ -9,42 +9,30 @@ TOKEN = os.getenv("TOKEN")
 GUILD_ID = 1459639907004711127
 
 intents = discord.Intents.all()
-bot = commands.Bot(command_prefix="/", intents=intents)
+bot = commands.Bot(command_prefix="!", intents=intents)
 
 DATA_FILE = "data.json"
 bot_enabled = True
 
 # --------------------
-# DATA
+# MEMORY STORE (stabilabb mint file spam)
 # --------------------
+data = {}
+
 def load_data():
+    global data
     try:
         with open(DATA_FILE, "r") as f:
-            return json.load(f)
+            data = json.load(f)
     except:
-        return {}
+        data = {}
 
-def save_data(data):
+def save_data():
     with open(DATA_FILE, "w") as f:
         json.dump(data, f)
 
-data = load_data()
-
-@bot.event
-async def on_ready():
-    print("Bot online")
-
-    check_members.start()
-
-    guild = discord.Object(id=1459639907004711127)
-
-    try:
-        # csak guild sync (NINCS global)
-        synced = await bot.tree.sync(guild=guild)
-        print(f"Synced: {len(synced)}")
-    except Exception as e:
-        print(e)# --------------------
-# PR.TAG CHECK
+# --------------------
+# PR TAG CHECK
 # --------------------
 def is_prtag(member):
     return any(r.name == "pr.tag" for r in member.roles)
@@ -56,10 +44,10 @@ def is_prtag(member):
 async def on_member_join(member):
     if str(member.id) not in data:
         data[str(member.id)] = datetime.utcnow().isoformat()
-        save_data(data)
+        save_data()
 
 # --------------------
-# CHECK LOOP
+# KICK CHECK LOOP
 # --------------------
 @tasks.loop(minutes=10)
 async def check_members():
@@ -76,7 +64,7 @@ async def check_members():
 
             if str(member.id) not in data:
                 data[str(member.id)] = now.isoformat()
-                save_data(data)
+                save_data()
                 continue
 
             join_time = datetime.fromisoformat(data[str(member.id)])
@@ -88,10 +76,10 @@ async def check_members():
                     pass
 
                 del data[str(member.id)]
-                save_data(data)
+                save_data()
 
 # --------------------
-# COMMANDOK
+# COMMAND GUILD
 # --------------------
 guild = discord.Object(id=GUILD_ID)
 
@@ -114,32 +102,33 @@ async def be(interaction: discord.Interaction):
 @bot.tree.command(name="hozzaad", guild=guild)
 async def hozzaad(interaction: discord.Interaction, member: discord.Member):
     data[str(member.id)] = datetime.utcnow().isoformat()
-    save_data(data)
-    await interaction.response.send_message(f"➕ {member.name} hozzáadva")
+    save_data()
+    await interaction.response.send_message(f"➕ Hozzáadva: {member.name}")
 
 @bot.tree.command(name="kivesz", guild=guild)
 async def kivesz(interaction: discord.Interaction, member: discord.Member):
     if str(member.id) in data:
         del data[str(member.id)]
-        save_data(data)
-    await interaction.response.send_message(f"🗑 {member.name} kivéve")
+        save_data()
+    await interaction.response.send_message(f"🗑 Kivéve: {member.name}")
 
 @bot.tree.command(name="stats", guild=guild)
 async def stats(interaction: discord.Interaction):
 
     now = datetime.utcnow()
-    msg = "📊 PR.TAG STATS:\n\n"
+    msg = "📊 PR TAG STATS:\n\n"
 
-    for guild_obj in bot.guilds:
-        for member in guild_obj.members:
+    for member_id, time_str in data.items():
+
+        try:
+            member = interaction.guild.get_member(int(member_id))
+            if not member:
+                continue
 
             if not is_prtag(member):
                 continue
 
-            if str(member.id) not in data:
-                continue
-
-            join_time = datetime.fromisoformat(data[str(member.id)])
+            join_time = datetime.fromisoformat(time_str)
             remaining = timedelta(days=7) - (now - join_time)
 
             sec = int(remaining.total_seconds())
@@ -147,10 +136,12 @@ async def stats(interaction: discord.Interaction):
             if sec > 0:
                 h = sec // 3600
                 m = (sec % 3600) // 60
-                s = sec % 60
-                msg += f"{member.name} → {h}h {m}m {s}s\n"
+                msg += f"{member.name} → {h}h {m}m\n"
             else:
                 msg += f"{member.name} → KICK SOON\n"
+
+        except:
+            continue
 
     await interaction.response.send_message(msg[:2000])
 
@@ -158,17 +149,18 @@ async def stats(interaction: discord.Interaction):
 async def refresh(interaction: discord.Interaction):
     try:
         synced = await bot.tree.sync(guild=guild)
-        await interaction.response.send_message(f"🔄 Frissítve ({len(synced)})")
+        await interaction.response.send_message(f"🔄 Sync kész ({len(synced)})")
     except Exception as e:
-        await interaction.response.send_message(f"Hiba: {e}")
+        await interaction.response.send_message(str(e))
 
 # --------------------
-# READY
+# READY (STABIL)
 # --------------------
 @bot.event
 async def on_ready():
     print("Bot online")
 
+    load_data()
     check_members.start()
 
     try:
