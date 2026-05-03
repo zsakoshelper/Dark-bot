@@ -44,9 +44,6 @@ async def on_member_join(member):
         data[str(member.id)] = datetime.utcnow().isoformat()
         save_data(data)
 
-# --------------------
-# CHECK LOOP (kick)
-# --------------------
 @tasks.loop(hours=1)
 async def check_members():
     if not bot_enabled:
@@ -99,7 +96,18 @@ async def be(interaction: discord.Interaction):
     bot_enabled = True
     await interaction.response.send_message("🟢 Bot bekapcsolva")
 
-# --------------------
+
+@bot.tree.command(name="refresh")
+async def refresh(interaction: discord.Interaction):
+
+    if not interaction.user.guild_permissions.staff:
+        return await interaction.response.send_message("❌ Nincs jogod!", ephemeral=True)
+
+    try:
+        synced = await bot.tree.sync()
+        await interaction.response.send_message(f"🔄 Frissítve! ({len(synced)} parancs)")
+    except Exception as e:
+        await interaction.response.send_message(f"Hiba: {e}")# --------------------
 # /HOZZAAD (manuális user)
 # --------------------
 @bot.tree.command(name="hozzaad")
@@ -153,10 +161,21 @@ async def stats(interaction: discord.Interaction):
 # --------------------
 # READY
 # --------------------
+# --------------------
+# READY
+# --------------------
 @bot.event
 async def on_ready():
     print("Bot online")
-    check_members.start()
-    await bot.tree.sync()
 
+    check_members.start()
+
+    guild = discord.Object(id=1459639907004711127)
+
+    try:
+        synced = await bot.tree.sync(guild=guild)
+        print(f"Guild sync: {len(synced)}")
+    except Exception as e:
+        print(e)
+        
 bot.run(TOKEN)
