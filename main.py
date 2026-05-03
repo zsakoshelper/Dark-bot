@@ -9,11 +9,12 @@ TOKEN = os.getenv("TOKEN")
 intents = discord.Intents.all()
 bot = commands.Bot(command_prefix="/", intents=intents)
 
-DATA_FILE = "users.json"
+DATA_FILE = "data.json"
+
 bot_enabled = True
 
 # --------------------
-# ADATOK
+# DATA KEZELÉS
 # --------------------
 def load_data():
     try:
@@ -35,15 +36,16 @@ def is_prtag(member):
     return any(r.name == "pr.tag" for r in member.roles)
 
 # --------------------
-# BELÉPÉS
+# JOIN
 # --------------------
 @bot.event
 async def on_member_join(member):
-    data[str(member.id)] = datetime.utcnow().isoformat()
-    save_data(data)
+    if str(member.id) not in data:
+        data[str(member.id)] = datetime.utcnow().isoformat()
+        save_data(data)
 
 # --------------------
-# 7 NAP CHECK + KICK
+# CHECK LOOP (kick)
 # --------------------
 @tasks.loop(hours=1)
 async def check_members():
@@ -73,13 +75,80 @@ async def check_members():
                 save_data(data)
 
 # --------------------
-# /ELLENŐRZÉS
+# /ELLENORZES
 # --------------------
 @bot.tree.command(name="ellenorzes")
 async def ellenorzes(interaction: discord.Interaction):
-    await interaction.response.send_message(
-        f"🟢 Bot működik\n📡 Ping: {round(bot.latency*1000)}ms"
-    )
+    await interaction.response.send_message("🟢 Bot működik")
+
+# --------------------
+# /KI (bot leállítás logika)
+# --------------------
+@bot.tree.command(name="ki")
+async def ki(interaction: discord.Interaction):
+    global bot_enabled
+    bot_enabled = False
+    await interaction.response.send_message("🔴 Bot kikapcsolva")
+
+# --------------------
+# /BE
+# --------------------
+@bot.tree.command(name="be")
+async def be(interaction: discord.Interaction):
+    global bot_enabled
+    bot_enabled = True
+    await interaction.response.send_message("🟢 Bot bekapcsolva")
+
+# --------------------
+# /HOZZAAD (manuális user)
+# --------------------
+@bot.tree.command(name="hozzaad")
+async def hozzaad(interaction: discord.Interaction, member: discord.Member):
+    data[str(member.id)] = datetime.utcnow().isoformat()
+    save_data(data)
+    await interaction.response.send_message(f"➕ Hozzáadva: {member.name}")
+
+# --------------------
+# /KIVESZ
+# --------------------
+@bot.tree.command(name="kivesz")
+async def kivesz(interaction: discord.Interaction, member: discord.Member):
+    if str(member.id) in data:
+        del data[str(member.id)]
+        save_data(data)
+    await interaction.response.send_message(f"🗑 Kivéve: {member.name}")
+
+# --------------------
+# /STATS
+# --------------------
+@bot.tree.command(name="stats")
+async def stats(interaction: discord.Interaction):
+
+    now = datetime.utcnow()
+    msg = "📊 PR.TAG STATISZTIKA:\n\n"
+
+    for guild in bot.guilds:
+        for member in guild.members:
+
+            if not is_prtag(member):
+                continue
+
+            if str(member.id) not in data:
+                continue
+
+            join_time = datetime.fromisoformat(data[str(member.id)])
+            remaining = timedelta(days=7) - (now - join_time)
+
+            sec = int(remaining.total_seconds())
+
+            if sec > 0:
+                h = sec // 3600
+                m = (sec % 3600) // 60
+                msg += f"{member.name} → {h}h {m}m maradt\n"
+            else:
+                msg += f"{member.name} → KÖZEL A KICKHEZ\n"
+
+    await interaction.response.send_message(msg[:2000])
 
 # --------------------
 # READY
