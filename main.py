@@ -6,7 +6,8 @@ import os
 
 TOKEN = os.getenv("TOKEN")
 
-GUILD_ID = 1459639907004711127
+# ÚJ SZERVER ID
+GUILD_ID = 1501208722083545088
 
 intents = discord.Intents.all()
 bot = commands.Bot(command_prefix="!", intents=intents)
@@ -15,7 +16,7 @@ DATA_FILE = "data.json"
 bot_enabled = True
 
 # --------------------
-# MEMORY STORE (stabilabb mint file spam)
+# MEMORY STORE
 # --------------------
 data = {}
 
@@ -136,7 +137,8 @@ async def stats(interaction: discord.Interaction):
             if sec > 0:
                 h = sec // 3600
                 m = (sec % 3600) // 60
-                msg += f"{member.name} → {h}h {m}m\n"
+                s = sec % 60
+                msg += f"{member.name} → {h}h {m}m {s}s\n"
             else:
                 msg += f"{member.name} → KICK SOON\n"
 
@@ -154,7 +156,7 @@ async def refresh(interaction: discord.Interaction):
         await interaction.response.send_message(str(e))
 
 # --------------------
-# READY (STABIL)
+# READY
 # --------------------
 @bot.event
 async def on_ready():
